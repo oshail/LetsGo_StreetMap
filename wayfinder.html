@@ -1,0 +1,432 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LetsGo – find your next favourite place</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Inter',system-ui,sans-serif;background:#0b1020;color:#0f172a}
+/* critical map layout in plain CSS so the map always has a size */
+#app{position:relative;height:calc(100vh - 64px);overflow:hidden;background:#e5e7eb}#app.hidden{display:none}
+#map{position:absolute;top:0;right:0;bottom:0;left:0}
+.pin{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:3px solid #fff;box-shadow:0 4px 12px #0005;font-size:15px}
+.glass{background:rgba(255,255,255,.92);backdrop-filter:blur(14px)}
+.hsb::-webkit-scrollbar{display:none}.hsb{scrollbar-width:none}
+.sk{animation:p 1.2s infinite}@keyframes p{50%{opacity:.4}}
+.blob{animation:fl 14s ease-in-out infinite alternate}@keyframes fl{to{transform:translate(40px,-30px) scale(1.15)}}
+.here{position:relative}.here i{display:block;width:18px;height:18px;border-radius:50%;background:#e11d48;border:3px solid #fff;animation:pu 1.6s infinite}
+.here b{position:absolute;left:26px;top:-3px;white-space:nowrap;background:#e11d48;color:#fff;font-size:12px;padding:3px 10px;border-radius:999px;box-shadow:0 2px 8px #0004}
+@keyframes pu{0%{box-shadow:0 0 0 0 #e11d4899}70%{box-shadow:0 0 0 18px #e11d4800}100%{box-shadow:0 0 0 0 #e11d4800}}
+.tile{transition:transform .25s,box-shadow .25s}.tile:hover{transform:translateY(-6px);box-shadow:0 24px 40px -12px #0007}
+input:focus,select:focus,textarea:focus{outline:2px solid #818cf8;outline-offset:1px}
+</style></head>
+<body>
+<header class="h-16 sticky top-0 z-[1500] flex items-center justify-between px-5 bg-[#0b1020]/90 backdrop-blur border-b border-white/10">
+  <a href="#" id="brand" class="flex items-center gap-2 text-white font-extrabold text-xl">
+    <img src="map.png" alt="LetsGo logo" class="w-8 h-8 rounded-xl object-contain">
+    LetsGo
+  </a>
+  <button id="launchTop" class="px-4 py-2 rounded-full bg-white text-slate-900 text-sm font-semibold hover:bg-indigo-100">Open map</button>
+</header>
+
+<main id="landing" class="text-white">
+ <section class="relative overflow-hidden bg-gradient-to-b from-[#0b1020] via-indigo-950 to-[#0b1020]">
+  <div class="blob absolute -top-20 -left-20 w-96 h-96 rounded-full bg-indigo-600/40 blur-3xl"></div>
+  <div class="blob absolute top-40 right-0 w-96 h-96 rounded-full bg-fuchsia-600/30 blur-3xl" style="animation-delay:-5s"></div>
+  <div class="relative max-w-3xl mx-auto px-6 pt-24 pb-28 text-center">
+   <p class="inline-block px-4 py-1 rounded-full bg-white/10 border border-white/20 text-sm text-indigo-200">✨ Your city, your mood</p>
+   <h1 class="mt-6 text-5xl md:text-7xl font-extrabold leading-[1.05] tracking-tight">Find your next <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-amber-200">favourite place.</span></h1>
+   <p class="mt-5 text-lg text-slate-300">Wander without the wondering.</p>
+   <form id="heroForm" class="mt-10 flex flex-col sm:flex-row gap-3 p-2 rounded-3xl bg-white/10 border border-white/20 backdrop-blur">
+    <input id="heroPlace" autocomplete="off" aria-label="Where are you today?" placeholder="Where are you today?" class="flex-1 px-5 py-4 rounded-2xl bg-white text-slate-900 text-lg placeholder:text-slate-400">
+    <button class="px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 font-bold text-lg hover:scale-[1.03] transition">Explore →</button>
+   </form>
+   <p class="mt-4 text-sm text-slate-400">Try <button type="button" data-fill="Indiranagar, Bengaluru" class="underline hover:text-white">Indiranagar</button> · <button type="button" data-fill="Shibuya, Tokyo" class="underline hover:text-white">Shibuya</button> · <button type="button" data-fill="Soho, London" class="underline hover:text-white">Soho</button> · <button type="button" data-fill="Colaba, Mumbai" class="underline hover:text-white">Colaba</button></p>
+  </div>
+ </section>
+
+ <section class="max-w-5xl mx-auto px-6 py-20">
+  <h2 class="text-3xl md:text-4xl font-extrabold text-center">What’s the vibe today?</h2>
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-5 mt-12">
+   <button data-mood="cafe" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-600 min-h-[170px]"><div class="text-5xl">☕</div><p class="text-xl font-extrabold mt-6">Slow morning</p><p class="text-sm text-white/80">Warm cup, no hurry</p></button>
+   <button data-mood="food" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-rose-500 to-red-700 min-h-[170px]"><div class="text-5xl">🍜</div><p class="text-xl font-extrabold mt-6">Midnight craving</p><p class="text-sm text-white/80">Something hot, right now</p></button>
+   <button data-mood="park" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-700 min-h-[170px]"><div class="text-5xl">🌳</div><p class="text-xl font-extrabold mt-6">Need some green</p><p class="text-sm text-white/80">Leaves over concrete</p></button>
+   <button data-mood="pharmacy" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-sky-400 to-blue-700 min-h-[170px]"><div class="text-5xl">💊</div><p class="text-xl font-extrabold mt-6">Under the weather</p><p class="text-sm text-white/80">Rest up, feel better</p></button>
+   <button data-mood="transit" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-violet-500 to-purple-800 min-h-[170px]"><div class="text-5xl">🚏</div><p class="text-xl font-extrabold mt-6">Somewhere to be</p><p class="text-sm text-white/80">Catch the next ride</p></button>
+   <button data-mood="atm" class="tile text-left p-6 rounded-3xl bg-gradient-to-br from-lime-400 to-green-700 min-h-[170px]"><div class="text-5xl">🏧</div><p class="text-xl font-extrabold mt-6">Pockets empty</p><p class="text-sm text-white/80">Cash for the chai stall</p></button>
+  </div>
+ </section>
+
+ <section class="max-w-5xl mx-auto px-6 pb-20 text-center"><h2 class="text-3xl md:text-4xl font-extrabold">Around the world</h2><p class="text-slate-400 mt-2">Any city, any country.</p><div class="flex flex-wrap justify-center gap-3 mt-8"><button data-city="Tokyo, Japan|35.6762|139.6503" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇯🇵 Tokyo</button><button data-city="Paris, France|48.8566|2.3522" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇫🇷 Paris</button><button data-city="New York, USA|40.7128|-74.006" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇺🇸 New York</button><button data-city="London, UK|51.5072|-0.1276" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇬🇧 London</button><button data-city="Dubai, UAE|25.2048|55.2708" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇦🇪 Dubai</button><button data-city="Sydney, Australia|-33.8688|151.2093" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇦🇺 Sydney</button><button data-city="Singapore|1.3521|103.8198" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇸🇬 Singapore</button><button data-city="Istanbul, Türkiye|41.0082|28.9784" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇹🇷 Istanbul</button><button data-city="Cape Town, South Africa|-33.9249|18.4241" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇿🇦 Cape Town</button><button data-city="Rio de Janeiro, Brazil|-22.9068|-43.1729" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇧🇷 Rio de Janeiro</button><button data-city="Bengaluru, India|12.9716|77.5946" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇮🇳 Bengaluru</button><button data-city="Rome, Italy|41.9028|12.4964" class="px-5 py-3 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 font-medium">🇮🇹 Rome</button></div></section>
+ <section class="px-6 pb-24"><div class="max-w-4xl mx-auto rounded-3xl bg-gradient-to-r from-indigo-600/30 to-fuchsia-600/30 border border-white/10 p-10 md:p-16 text-center">
+  <p class="text-3xl md:text-5xl font-extrabold leading-tight">“The best trips start with a small detour.”</p>
+  <p class="mt-6 text-slate-300">Go on. Take the long way home.</p></div></section>
+ <footer class="text-center text-sm text-slate-500 pb-10"></footer>
+</main>
+
+<div id="app" class="hidden">
+ <div id="map"></div>
+ <div class="absolute z-[1000] top-3 left-1/2 -translate-x-1/2 w-[min(700px,94%)] space-y-2">
+  <form id="searchForm" novalidate class="glass rounded-2xl shadow-xl p-2 flex items-center gap-1">
+   <span class="pl-3">🔎</span>
+   <input id="place" autocomplete="off" placeholder="Search a street, area or city…" aria-label="Place" aria-describedby="placeErr" class="flex-1 min-w-0 bg-transparent px-2 py-2">
+   <button type="button" id="locate" title="Use my location" class="w-10 h-10 rounded-xl hover:bg-indigo-50">📍</button>
+   <button type="button" id="fBtn" class="px-3 h-10 rounded-xl hover:bg-indigo-50 text-sm font-medium">⚙ Filters</button>
+   <button class="px-5 h-10 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-500">Go</button>
+  </form>
+  <p id="placeErr" class="hidden text-sm text-rose-700 bg-rose-50 rounded-xl px-3 py-2 shadow" role="alert"></p>
+  <div id="suggest" class="hidden glass rounded-2xl shadow-xl overflow-hidden max-h-72 overflow-y-auto"></div>
+  <div id="filters" class="hidden glass rounded-2xl shadow-xl p-4 grid grid-cols-2 gap-3 text-sm">
+   <label class="col-span-2 font-medium">Distance: <b id="rv">1000</b> m<input id="radius" type="range" min="300" max="3000" step="100" value="1000" class="w-full accent-indigo-600"></label>
+   <label class="flex items-center gap-2"><input id="fOpen" type="checkbox" class="accent-indigo-600"> Open now</label>
+   <label class="flex items-center gap-2"><input id="fWheel" type="checkbox" class="accent-indigo-600"> ♿ Accessible</label>
+   <label class="col-span-2 flex items-center gap-2">🌍 Jump to <select id="world" class="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5"><option value="">Pick a city worldwide…</option><option value="Tokyo, Japan|35.6762|139.6503">🇯🇵 Tokyo, Japan</option><option value="Paris, France|48.8566|2.3522">🇫🇷 Paris, France</option><option value="New York, USA|40.7128|-74.006">🇺🇸 New York, USA</option><option value="London, UK|51.5072|-0.1276">🇬🇧 London, UK</option><option value="Dubai, UAE|25.2048|55.2708">🇦🇪 Dubai, UAE</option><option value="Sydney, Australia|-33.8688|151.2093">🇦🇺 Sydney, Australia</option><option value="Singapore|1.3521|103.8198">🇸🇬 Singapore</option><option value="Istanbul, Türkiye|41.0082|28.9784">🇹🇷 Istanbul, Türkiye</option><option value="Cape Town, South Africa|-33.9249|18.4241">🇿🇦 Cape Town, South Africa</option><option value="Rio de Janeiro, Brazil|-22.9068|-43.1729">🇧🇷 Rio de Janeiro, Brazil</option><option value="Bengaluru, India|12.9716|77.5946">🇮🇳 Bengaluru, India</option><option value="Rome, Italy|41.9028|12.4964">🇮🇹 Rome, Italy</option></select></label>
+   <label class="col-span-2 flex items-center gap-2">Sort <select id="sort" class="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5"><option value="dist">Nearest first</option><option value="name">Name A–Z</option></select></label>
+  </div>
+  <div id="chips" class="flex gap-2 overflow-x-auto hsb pb-1"></div>
+ </div>
+ <aside class="absolute z-[900] inset-x-0 bottom-0 h-[42%] md:inset-x-auto md:left-3 md:top-[140px] md:bottom-3 md:h-auto md:w-[380px] glass rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col">
+  <div class="flex items-center justify-between px-4 pt-3 text-sm">
+   <div class="flex gap-1"><button id="tabN" class="px-3 py-1.5 rounded-full">Nearby</button><button id="tabS" class="px-3 py-1.5 rounded-full">★ Saved</button></div>
+   <span class="text-slate-500"><b id="count">0</b> places</span>
+  </div>
+  <p id="status" class="mx-4 mt-2 text-sm hidden rounded-xl px-3 py-2" role="status"></p>
+  <div id="results" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+  <div class="flex gap-2 p-3 border-t border-slate-200">
+   <button id="share" class="flex-1 text-sm py-2.5 rounded-xl bg-slate-100 hover:bg-indigo-100 font-medium">🔗 Share</button>
+   <button id="reportBtn" class="flex-1 text-sm py-2.5 rounded-xl bg-slate-100 hover:bg-indigo-100 font-medium">📝 Report an issue</button>
+  </div>
+ </aside>
+</div>
+
+<div id="modal" class="hidden fixed inset-0 z-[2000] bg-slate-900/60 backdrop-blur-sm grid place-items-center p-4">
+ <form id="reportForm" novalidate class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 space-y-3">
+  <h2 class="text-2xl font-extrabold">Spotted something off?</h2>
+  <p class="text-sm text-slate-500">Pinned at the centre of the map (<span id="rLoc"></span>).</p>
+  <div><label for="rName" class="text-sm font-medium">Place name *</label><input id="rName" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-slate-300"><p class="err text-sm text-rose-600 hidden" data-for="rName"></p></div>
+  <div><label for="rType" class="text-sm font-medium">What’s wrong? *</label><select id="rType" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-slate-300 bg-white"><option value="">Choose…</option><option>Missing place</option><option>Wrong opening hours</option><option>Wrong accessibility info</option><option>Place closed permanently</option></select><p class="err text-sm text-rose-600 hidden" data-for="rType"></p></div>
+  <div><label for="rText" class="text-sm font-medium">Details * <span id="rCount" class="text-slate-400">0/300</span></label><textarea id="rText" rows="3" maxlength="300" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-slate-300"></textarea><p class="err text-sm text-rose-600 hidden" data-for="rText"></p></div>
+  <label class="flex items-center gap-2 text-sm"><input id="rPreview" type="checkbox" checked class="accent-indigo-600"> Preview only (untick to send a real, public note to OpenStreetMap)</label>
+  <p id="rFeedback" class="text-sm hidden rounded-xl px-3 py-2" role="status"></p>
+  <div class="flex gap-2 justify-end"><button type="button" id="rClose" class="px-4 py-2.5 rounded-xl bg-slate-100">Close</button><button class="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-500">Send</button></div>
+ </form>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+/* SCRIPT 1 — data layer: fetch API calls, JSON handling, opening-hours parsing */
+const API = (() => {
+  const CATS = {
+    cafe: ['☕', 'Cafés', '#f59e0b', 'amenity', 'cafe'],
+    food: ['🍜', 'Food', '#ef4444', 'amenity', 'restaurant|fast_food'],
+    pharmacy: ['💊', 'Pharmacy', '#10b981', 'amenity', 'pharmacy'],
+    hospital: ['🏥', 'Health', '#f43f5e', 'amenity', 'hospital|clinic'],
+    atm: ['🏧', 'ATMs', '#6366f1', 'amenity', 'atm'],
+    toilets: ['🚻', 'Toilets', '#0ea5e9', 'amenity', 'toilets'],
+    park: ['🌳', 'Parks', '#22c55e', 'leisure', 'park'],
+    transit: ['🚏', 'Bus stops', '#a855f7', 'highway', 'bus_stop']
+  };
+  async function getJSON(url, opts = {}, ms = 20000) {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+    try {
+      const r = await fetch(url, { ...opts, signal: ctl.signal });
+      if (!r.ok) throw new Error(r.status === 429 ? 'Too many requests – please wait a few seconds.' : `Server error (${r.status}).`);
+      return await r.json();
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('The request timed out.');
+      if (e instanceof TypeError) throw new Error('Network problem – check your connection.');
+      if (e instanceof SyntaxError) throw new Error('Received unreadable data from the server.');
+      throw e;
+    } finally { clearTimeout(t); }
+  }
+  const geocode = q => getJSON('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&polygon_geojson=1&polygon_threshold=0.01&accept-language=en&q=' + encodeURIComponent(q));
+  function measure(p, c) {
+    const R = 6371000, rad = d => d * Math.PI / 180;
+    const a = Math.sin(rad(p.lat - c.lat) / 2) ** 2 + Math.cos(rad(c.lat)) * Math.cos(rad(p.lat)) * Math.sin(rad(p.lon - c.lon) / 2) ** 2;
+    const dist = Math.round(2 * R * Math.asin(Math.sqrt(a)));
+    return { dist, walk: Math.max(1, Math.round(dist / 80)) };
+  }
+  // tiny opening_hours interpreter: handles "24/7", "Mo-Sa 09:00-18:00; Su off", lists; returns true/false/null(unknown)
+  function openNow(h, d = new Date()) {
+    if (!h) return null;
+    if (h.trim() === '24/7') return true;
+    const D = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'], today = d.getDay(), cur = d.getHours() * 60 + d.getMinutes();
+    const dayHit = s => !s.trim() || s.split(',').some(x => {
+      const [a, b] = x.trim().split('-').map(v => D.indexOf(v.slice(0, 2)));
+      if (a < 0) return false; if (b === undefined || x.indexOf('-') < 0) return a === today;
+      return a <= b ? today >= a && today <= b : today >= a || today <= b;
+    });
+    let res = null;
+    for (const rule of h.split(';')) {
+      const m = rule.trim().match(/^([A-Za-z,\- ]*?)\s*((?:\d{1,2}:\d{2}-\d{1,2}:\d{2}(?:\s*,\s*)?)+|off)$/);
+      if (!m) continue;
+      if (!dayHit(m[1])) continue;
+      if (m[2] === 'off') { res = false; continue; }
+      res = m[2].split(',').some(r => {
+        const [s, e] = r.trim().split('-').map(t => { const [H, M] = t.split(':'); return +H * 60 + +M; });
+        return e > s ? cur >= s && cur < e : cur >= s || cur < e;
+      });
+    }
+    return res;
+  }
+  const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  const cache = new Map();
+  async function nearby(c, radius, cat) {
+    const key = [c.lat.toFixed(4), c.lon.toFixed(4), radius, cat].join();
+    if (cache.has(key)) return cache.get(key);
+    const [, label, , k, v] = CATS[cat], f = `["${k}"~"^(${v})$"]`, a = `(around:${radius},${c.lat},${c.lon})`;
+    const q = `[out:json][timeout:20];(node${a}${f};way${a}${f};);out center tags 50;`;
+    let j;
+    try { j = await Promise.any(MIRRORS.map(u => getJSON(u, { method: 'POST', body: 'data=' + encodeURIComponent(q) }, 22000))); }
+    catch (e) { throw new Error('The map-data servers are busy right now. Tap “Try again” in a few seconds.'); }
+    if (!j || !Array.isArray(j.elements)) throw new Error('Unexpected response from map server.');
+    if (j.remark && !j.elements.length) throw new Error('The map-data server was too busy. Tap “Try again”.');
+    const out = j.elements.map(e => {
+      const lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon, t = e.tags || {};
+      if (lat == null) return null;
+      const p = { id: e.type[0] + e.id, name: t['name:en'] || t.name || label.replace(/s$/, '') + ' (unnamed)', lat, lon, cat, hours: t.opening_hours || '', wheel: t.wheelchair || '', open: openNow(t.opening_hours), phone: t.phone || t['contact:phone'] || '' };
+      return { ...p, ...measure(p, c) };
+    }).filter(Boolean);
+    cache.set(key, out); return out;
+  }
+  async function route(a, b) {
+    const j = await getJSON(`https://router.project-osrm.org/route/v1/foot/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`);
+    if (!j.routes?.length) throw new Error('No walking route found.');
+    return { geo: j.routes[0].geometry, km: (j.routes[0].distance / 1000).toFixed(2), min: Math.max(1, Math.round(j.routes[0].distance / 80)) };
+  }
+  async function reportNote(lat, lon, text) {
+    const j = await getJSON('https://api.openstreetmap.org/api/0.6/notes.json', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ lat, lon, text }) });
+    return j.properties?.id;
+  }
+  return { CATS, geocode, nearby, route, measure, reportNote };
+})();
+
+</script>
+<script>
+/* SCRIPT 2 — map layer: Leaflet map with automatic tile-provider fallback, pins, radius ring, routes */
+const MapView = (() => {
+  const BASES = [
+    ['Light', 'https://{s}.basemaps.cartocdn.com/rasterTiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap contributors © CARTO' }],
+    ['Street', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }],
+    ['Esri streets', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }],
+    ['Satellite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles © Esri' }]
+  ];
+  let map, layer, routeLayer, ring, here;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function banner(msg, bad) {
+    let d = document.getElementById('tileMsg');
+    if (!d) { d = document.createElement('div'); d.id = 'tileMsg'; d.style.cssText = 'position:absolute;bottom:10px;right:60px;z-index:999;max-width:340px;font-size:12px;padding:8px 12px;border-radius:12px;box-shadow:0 4px 14px #0003'; document.getElementById('app').appendChild(d); }
+    d.style.background = bad ? '#ffe4e6' : '#e0e7ff'; d.style.color = bad ? '#9f1239' : '#3730a3'; d.textContent = msg;
+    if (!bad) setTimeout(() => d.remove(), 3500);
+  }
+  function init() {
+    map = L.map('map', { zoomControl: false, worldCopyJump: true, minZoom: 2 }).setView([20, 10], 2);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const base = {}; BASES.forEach(([n, u, o]) => base[n] = L.tileLayer(u, o));
+    const names = Object.keys(base); let errs = 0, loaded = false;
+    base[names[0]].addTo(map);
+    L.control.layers(base, null, { position: 'bottomright' }).addTo(map);
+    names.forEach((n, i) => {
+      base[n].on('tileload', () => { loaded = true; errs = 0; const m = document.getElementById('tileMsg'); if (m) m.remove(); });
+      base[n].on('tileerror', () => {
+        if (loaded || !map.hasLayer(base[n]) || ++errs < 4) return;
+        errs = 0; map.removeLayer(base[n]);
+        if (i + 1 < names.length - 1) { base[names[i + 1]].addTo(map); banner('Map style “' + n + '” is blocked on your network – switching to “' + names[i + 1] + '”…'); }
+        else banner('Map tiles couldn’t load from any provider. Check internet/VPN/ad-blocker, or open this page via http://localhost (run: python3 -m http.server 8000).', true);
+      });
+    });
+    if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('map'));
+    here = L.layerGroup().addTo(map); layer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map);
+  }
+  const icon = (p, saved) => { const [e, , col] = API.CATS[p.cat]; return L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html: `<div class="pin" style="background:${saved ? '#fbbf24' : col}"><span>${e}</span></div>` }); };
+  function setCenter(c, r) {
+    if (ring) map.removeLayer(ring);
+    here.clearLayers();
+    ring = L.circle([c.lat, c.lon], { radius: r, color: '#6366f1', weight: 2, fillOpacity: .06, dashArray: '6' }).addTo(map);
+    let b = ring.getBounds();
+    if (c.geo && /Polygon/.test(c.geo.type)) {
+      const g = L.geoJSON(c.geo, { style: { color: '#e11d48', weight: 3, fillColor: '#e11d48', fillOpacity: .08 } }).addTo(here);
+      b = b.extend(g.getBounds());
+    }
+    L.marker([c.lat, c.lon], { zIndexOffset: 1000, interactive: false, icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 9], html: `<div class="here"><i></i><b>${esc(c.label || 'Here')}</b></div>` }) }).addTo(here);
+    map.fitBounds(b, { padding: [30, 30] });
+  }
+  function show(items, saved, onPick) {
+    layer.clearLayers();
+    items.forEach(p => {
+      const m = L.marker([p.lat, p.lon], { icon: icon(p, saved.some(s => s.id === p.id)), title: p.name }).addTo(layer);
+      m.bindTooltip(p.name); m.on('click', () => onPick(p));
+    });
+  }
+  const focus = p => map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 16), { duration: .6 });
+  function drawRoute(geo) {
+    routeLayer.clearLayers();
+    const l = L.geoJSON(geo, { style: { color: '#4f46e5', weight: 6, opacity: .9 } }).addTo(routeLayer);
+    map.fitBounds(l.getBounds(), { padding: [50, 50] });
+  }
+  const clearRoute = () => routeLayer && routeLayer.clearLayers();
+  const center = () => { const c = map.getCenter(); return { lat: +c.lat.toFixed(6), lon: +c.lng.toFixed(6) }; };
+  const resize = () => map && [50, 300, 900].forEach(t => setTimeout(() => map.invalidateSize(), t));
+  return { init, setCenter, show, focus, drawRoute, clearRoute, center, resize };
+})();
+
+</script>
+<script>
+/* SCRIPT 3 — interface layer: validation, feedback, empty/error states, favourites, sharing */
+(() => {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+  const S = { c: null, cat: 'cafe', list: [], saved: store.get('wf_saved', []), view: 'nearby', routes: {} };
+  const tone = { ok: 'bg-lime-400/15 text-emerald-700', err: 'bg-rose-100 text-rose-800', info: 'bg-sky-100 text-sky-800' };
+
+  function say(el, msg, type = 'info') { el.className = 'text-sm rounded-lg px-3 py-2 ' + tone[type]; el.textContent = msg; el.classList.toggle('hidden', !msg); }
+  function launch() { $('#landing').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#app').classList.add('flex'); MapView.resize(); }
+
+  function badge(p) {
+    const o = p.open === true ? ['Open now', 'bg-emerald-100 text-emerald-800'] : p.open === false ? ['Closed', 'bg-rose-100 text-rose-800'] : ['Hours unknown', 'bg-stone-200 text-stone-600'];
+    const w = { yes: ['♿ Accessible', 'bg-sky-100 text-sky-800'], limited: ['♿ Limited', 'bg-amber-100 text-amber-800'], no: ['♿ Not accessible', 'bg-stone-200 text-stone-600'] }[p.wheel];
+    return `<span class="px-2 py-0.5 rounded-full text-xs ${o[1]}">${o[0]}</span>` + (w ? ` <span class="px-2 py-0.5 rounded-full text-xs ${w[1]}">${w[0]}</span>` : '');
+  }
+  function card(p) {
+    const star = S.saved.some(s => s.id === p.id), r = S.routes[p.id];
+    return `<div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-indigo-300 transition" data-id="${p.id}">
+      <div class="flex justify-between gap-2"><button data-act="go" class="text-left font-semibold">${API.CATS[p.cat][0]} ${esc(p.name)}</button><button data-act="save" aria-label="Save place" class="text-lg ${star ? 'text-amber-500' : 'text-stone-400'}">${star ? '★' : '☆'}</button></div>
+      <p class="text-sm text-stone-500 mt-1">${p.dist != null ? `${p.dist} m · ${p.walk} min walk` : 'Search a place to see distance'}</p>
+      <div class="mt-2">${badge(p)}</div>
+      ${p.hours ? `<p class="text-xs text-stone-400 mt-1 truncate" title="${esc(p.hours)}">🕒 ${esc(p.hours)}</p>` : ''}
+      <p class="text-sm text-emerald-700 mt-1 ${r ? '' : 'hidden'}">🚶 Route: ${r ? r.km + ' km · ' + r.min + ' min' : ''}</p></div>`;
+  }
+  function emptyBox(icon, title, text) { return `<div class="text-center py-10 px-4 text-stone-500"><div class="text-4xl">${icon}</div><p class="font-semibold text-stone-800 mt-2">${title}</p><p class="text-sm mt-1">${text}</p></div>`; }
+
+  function render() {
+    const box = $('#results');
+    let items = S.view === 'saved' ? S.saved.map(p => ({ ...p, ...(S.c ? API.measure(p, S.c) : { dist: null }) })) : [...S.list];
+    if (S.view === 'nearby') {
+      if ($('#fOpen').checked) items = items.filter(p => p.open === true);
+      if ($('#fWheel').checked) items = items.filter(p => p.wheel === 'yes');
+    }
+    items.sort($('#sort').value === 'name' ? (a, b) => a.name.localeCompare(b.name) : (a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9));
+    MapView.show(items, S.saved, pick);
+    $('#count').textContent = items.length;
+    if (items.length) { box.innerHTML = items.map(card).join(''); return; }
+    if (S.view === 'saved') box.innerHTML = emptyBox('⭐', 'No saved places yet', 'Tap the ☆ on any result to keep it here.');
+    else if (!S.c) box.innerHTML = emptyBox('🧭', 'Where to?', 'Search for a place or tap “Use my location” to begin.');
+    else {
+      const f = $('#fOpen').checked || $('#fWheel').checked;
+      box.innerHTML = emptyBox('🔍', `No ${API.CATS[S.cat][1].toLowerCase()} found`, f ? 'Your filters may be too strict – try turning them off.' : 'Try a larger radius or another category. You can also report a missing place below.');
+    }
+  }
+
+  async function load() {
+    if (!S.c) { render(); return; }
+    const box = $('#results'), r = +$('#radius').value;
+    box.innerHTML = '<div class="sk h-20 rounded-xl bg-stone-200"></div>'.repeat(3);
+    say($('#status'), 'Searching OpenStreetMap…', 'info');
+    try {
+      S.list = await API.nearby(S.c, r, S.cat); S.routes = {}; MapView.clearRoute();
+      say($('#status'), S.list.length ? `Found ${S.list.length} places within ${r} m.` : '', 'ok');
+      render();
+    } catch (e) {
+      S.list = []; say($('#status'), e.message, 'err');
+      box.innerHTML = emptyBox('⚠️', 'Couldn’t load places', e.message) + '<button id="retry" class="block mx-auto px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold">Try again</button>';
+      $('#retry').onclick = load; $('#count').textContent = 0;
+    }
+  }
+  function setCenter(c) { S.c = c; MapView.setCenter(c, +$('#radius').value); location.hash = `${c.lat.toFixed(5)},${c.lon.toFixed(5)},${S.cat},${$('#radius').value}`; return load(); }
+
+  async function pick(p) {
+    MapView.focus(p);
+    if (!S.c || S.routes[p.id]) return;
+    try { const r = await API.route(S.c, p); S.routes[p.id] = r; MapView.drawRoute(r.geo); render(); }
+    catch (e) { say($('#status'), 'Route unavailable: ' + e.message, 'err'); }
+  }
+  function toggleSave(p) {
+    S.saved = S.saved.some(s => s.id === p.id) ? S.saved.filter(s => s.id !== p.id) : [...S.saved, p];
+    store.set('wf_saved', S.saved); $('#tabS').textContent = `★ Saved (${S.saved.length})`; render();
+  }
+  const find = id => S.list.find(p => p.id === id) || S.saved.find(p => p.id === id);
+
+  // ---- search form validation
+  let SUG = [];
+  function showSuggest(g) {
+    SUG = g; const b = $('#suggest');
+    b.innerHTML = g.map((x, i) => `<button type="button" data-i="${i}" class="block w-full text-left px-4 py-2.5 hover:bg-indigo-50 border-b border-slate-100"><span class="font-semibold">${esc(x.name || x.display_name.split(',')[0])}</span> <span class="text-xs text-slate-500">${esc(x.address?.country || '')}</span><br><span class="text-xs text-slate-400">${esc(x.display_name.slice(0, 90))}</span></button>`).join('');
+    b.classList.remove('hidden');
+  }
+  function choose(x) { $('#suggest').classList.add('hidden'); $('#place').value = x.display_name.split(',').slice(0, 2).join(',').trim(); return setCenter({ lat: +x.lat, lon: +x.lon, label: x.display_name.split(',')[0].trim(), geo: x.geojson }); }
+  $('#suggest').onclick = e => { const b = e.target.closest('[data-i]'); if (b) choose(SUG[+b.dataset.i]); };
+  $('#searchForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = $('#place').value.trim(), err = $('#placeErr');
+    err.classList.add('hidden'); $('#suggest').classList.add('hidden');
+    if (v.length < 3) { err.textContent = 'Please type at least 3 characters (a place, street or city).'; err.classList.remove('hidden'); return; }
+    if (!/[\p{L}]/u.test(v)) { err.textContent = 'Include some letters – numbers alone can’t be located.'; err.classList.remove('hidden'); return; }
+    say($('#status'), 'Locating “' + v + '”…', 'info');
+    try {
+      const g = await API.geocode(v);
+      if (!g.length) { err.textContent = `We couldn’t find “${v}”. Check the spelling or add a city name.`; err.classList.remove('hidden'); say($('#status'), '', 'info'); return; }
+      if (g.length > 1) { showSuggest(g); say($('#status'), 'Several matches worldwide – pick yours.', 'info'); return; }
+      await choose(g[0]);
+    } catch (x) { say($('#status'), x.message, 'err'); }
+  });
+  $('#locate').onclick = () => {
+    if (!navigator.geolocation) return say($('#status'), 'Your browser doesn’t support location.', 'err');
+    say($('#status'), 'Getting your location…', 'info');
+    navigator.geolocation.getCurrentPosition(p => setCenter({ lat: p.coords.latitude, lon: p.coords.longitude, label: 'You are here' }),
+      er => say($('#status'), er.code === 1 ? 'Location permission denied – search for a place instead.' : 'Couldn’t get your location.', 'err'), { timeout: 10000 });
+  };
+
+  // ---- chips, filters, tabs, results
+  $('#chips').innerHTML = Object.entries(API.CATS).map(([k, v]) => `<button data-cat="${k}" class="chip px-3 py-1.5 rounded-full text-sm border-2">${v[0]} ${v[1]}</button>`).join('');
+  const paintChips = () => document.querySelectorAll('.chip').forEach(b => b.className = 'chip shrink-0 px-3.5 py-2 rounded-full text-sm font-medium border ' + (b.dataset.cat === S.cat ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow' : 'border-transparent bg-white/95 text-slate-700 shadow hover:bg-indigo-50'));
+  $('#chips').onclick = e => { const b = e.target.closest('[data-cat]'); if (b) { S.cat = b.dataset.cat; S.view = 'nearby'; paintChips(); setTab(); if (S.c) setCenter(S.c); else render(); } };
+  $('#radius').oninput = e => $('#rv').textContent = e.target.value;
+  $('#radius').onchange = () => S.c && setCenter(S.c);
+  ['#fOpen', '#fWheel', '#sort'].forEach(s => $(s).onchange = render);
+  const setTab = () => { $('#tabN').className = 'px-3 py-1 rounded-full ' + (S.view === 'nearby' ? 'bg-indigo-100 text-indigo-700 font-semibold' : ''); $('#tabS').className = 'px-3 py-1 rounded-full ' + (S.view === 'saved' ? 'bg-indigo-100 text-indigo-700 font-semibold' : ''); };
+  $('#tabN').onclick = () => { S.view = 'nearby'; setTab(); render(); };
+  $('#tabS').onclick = () => { S.view = 'saved'; setTab(); render(); };
+  $('#results').onclick = e => {
+    const a = e.target.closest('[data-act]'), id = e.target.closest('[data-id]')?.dataset.id, p = id && find(id);
+    if (a && p) a.dataset.act === 'save' ? toggleSave(p) : pick(p);
+  };
+  $('#share').onclick = async () => {
+    if (!S.c) return say($('#status'), 'Search a place first, then share it.', 'err');
+    try { await navigator.clipboard.writeText(location.href); say($('#status'), 'Link copied!', 'ok'); } catch { say($('#status'), 'Copy failed – copy the address bar link instead.', 'err'); }
+  };
+
+  // ---- report form (validation + feedback)
+  const R = { rName: v => v.length < 3 ? 'Enter the place name (min 3 characters).' : '', rType: v => v ? '' : 'Choose a problem type.', rText: v => v.length < 10 ? 'Please add at least 10 characters of detail.' : '' };
+  const rErr = (id, m) => { const el = document.querySelector(`.err[data-for=${id}]`); el.textContent = m; el.classList.toggle('hidden', !m); $('#' + id).classList.toggle('border-rose-500', !!m); };
+  Object.keys(R).forEach(id => $('#' + id).addEventListener('input', () => { rErr(id, R[id]($('#' + id).value.trim())); $('#rCount').textContent = $('#rText').value.length + '/300'; }));
+  $('#reportBtn').onclick = () => { const c = MapView.center(); $('#rLoc').textContent = `${c.lat}, ${c.lon}`; say($('#rFeedback'), '', 'info'); $('#modal').classList.remove('hidden'); };
+  $('#rClose').onclick = () => $('#modal').classList.add('hidden');
+  $('#reportForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const bad = Object.keys(R).map(id => { const m = R[id]($('#' + id).value.trim()); rErr(id, m); return m; }).filter(Boolean);
+    if (bad.length) return say($('#rFeedback'), 'Please fix the highlighted fields.', 'err');
+    const c = MapView.center(), text = `[Wayfinder] ${$('#rType').value}: ${$('#rName').value.trim()} – ${$('#rText').value.trim()}`;
+    if ($('#rPreview').checked) return say($('#rFeedback'), '✅ Preview OK – nothing was sent. Untick “Preview only” to file it for real.', 'ok');
+    say($('#rFeedback'), 'Sending to OpenStreetMap…', 'info');
+    try { const id = await API.reportNote(c.lat, c.lon, text); say($('#rFeedback'), `🎉 Thank you! Note #${id} is now public on OpenStreetMap for mappers to fix.`, 'ok'); $('#reportForm').reset(); $('#rPreview').checked = true; }
+    catch (x) { say($('#rFeedback'), 'Could not send: ' + x.message, 'err'); }
+  });
+
+  // ---- boot
+  $('#launchTop').onclick = launch;
+  const goCity = s => { const [n, la, lo] = s.split('|'); launch(); $('#place').value = n; $('#suggest').classList.add('hidden'); setCenter({ lat: +la, lon: +lo, label: n.split(',')[0] }); };
+  document.querySelectorAll('[data-city]').forEach(b => b.onclick = () => goCity(b.dataset.city));
+  $('#world').onchange = e => { if (e.target.value) goCity(e.target.value); };
+  $('#fBtn').onclick = () => $('#filters').classList.toggle('hidden');
+  document.querySelectorAll('[data-fill]').forEach(b => b.onclick = () => { $('#heroPlace').value = b.dataset.fill; });
+  $('#heroForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#heroPlace').value.trim(); launch(); $('#place').value = v; if (v) $('#searchForm').requestSubmit(); });
+  document.querySelectorAll('[data-mood]').forEach(b => b.onclick = () => { S.cat = b.dataset.mood; S.view = 'nearby'; paintChips(); setTab(); launch(); if (S.c) setCenter(S.c); else { render(); say($('#status'), 'Great pick! Tell me where you are and I’ll find them.', 'info'); $('#place').focus(); } });
+  $('#brand').onclick = e => { e.preventDefault(); $('#app').classList.add('hidden'); $('#app').classList.remove('flex'); $('#landing').classList.remove('hidden'); };
+  try { MapView.init(); } catch (e) { $('#map').innerHTML = '<p style="padding:40px;text-align:center">The map library couldn’t load. Check your internet or ad-blocker, then refresh.</p>'; }
+  paintChips(); setTab(); $('#tabS').textContent = `★ Saved (${S.saved.length})`; render();
+  const h = location.hash.slice(1).split(',');
+  if (h.length === 4 && !isNaN(h[0]) && !isNaN(h[1]) && API.CATS[h[2]]) { launch(); S.cat = h[2]; $('#radius').value = +h[3] || 1000; $('#rv').textContent = $('#radius').value; paintChips(); setCenter({ lat: +h[0], lon: +h[1], label: 'Shared spot' }); }
+})();
+
+</script>
+</body></html>
